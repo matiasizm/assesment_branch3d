@@ -1,9 +1,5 @@
-// src/core/services/BeamAnalysisService.ts
-
-// FIX 1: Separamos la importación de la Clase (valor) y el Tipo (definición)
 import { Node } from '../entities/Node';
 import type { SupportType } from '../entities/Node';
-
 import { Element } from '../entities/Element';
 import { 
     PointForceLoad, 
@@ -15,7 +11,6 @@ import {
 } from '../entities/Load';
 import { FemSolver, type AnalysisResults } from '../logic/FemSolver';
 
-// --- DTOs ---
 export interface BeamInput {
     length: number;
     E: number; 
@@ -37,9 +32,36 @@ export interface BeamLoadInput {
 export class BeamAnalysisService {
 
     static analyze(input: BeamInput): AnalysisResults {
+        console.log('🔬 BeamAnalysisService.analyze() - Processing input...');
+        
         const { nodes, elements } = BeamAnalysisService.generateMesh(input);
+        console.log('📊 Generated Mesh:');
+        console.log('   Nodes (' + nodes.length + '):', nodes.map(n => `n${nodes.indexOf(n)}: x=${n.x.toFixed(3)}m, ${n.support}`).join(', '));
+        console.log('   Elements (' + elements.length + '):', elements.map(e => `e${elements.indexOf(e)}: ${e.startNode.x.toFixed(3)}m → ${e.endNode.x.toFixed(3)}m (L=${e.length.toFixed(3)}m)`).join(', '));
+        
         const domainLoads = BeamAnalysisService.processLoads(input.loads, elements);
-        return FemSolver.solve(nodes, elements, domainLoads);
+        console.log('📦 Processed Domain Loads (' + domainLoads.length + '):');
+        domainLoads.forEach((load, i) => {
+            if (load.type === 'PointForce') {
+                const pf = load as { x: number, magnitude: number };
+                console.log(`   ${i + 1}. PointForce: ${pf.magnitude.toFixed(2)} kN at x = ${pf.x.toFixed(3)} m`);
+            } else if (load.type === 'PointMoment') {
+                const pm = load as { x: number, magnitude: number };
+                console.log(`   ${i + 1}. PointMoment: ${pm.magnitude.toFixed(2)} kNm at x = ${pm.x.toFixed(3)} m`);
+            } else if (load.type === 'DistributedForce') {
+                const df = load as { startX: number, endX: number, magnitude: number };
+                console.log(`   ${i + 1}. DistributedForce: ${df.magnitude.toFixed(2)} kN/m from x = ${df.startX.toFixed(3)} m to ${df.endX.toFixed(3)} m`);
+            }
+        });
+        
+        console.log('⚙️  Calling FemSolver.solve()...');
+        const results = FemSolver.solve(nodes, elements, domainLoads);
+        console.log('✅ Analysis completed successfully');
+        console.log('📈 Results Summary:');
+        console.log('   Displacements:', Object.keys(results.displacements).length, 'nodes');
+        console.log('   Reactions:', Object.keys(results.reactions).length, 'nodes');
+        
+        return results;
     }
 
     private static generateMesh(input: BeamInput): { nodes: Node[], elements: Element[] } {
@@ -87,9 +109,7 @@ export class BeamAnalysisService {
             else if (raw.type === 'PointMoment' && typeof raw.x === 'number') {
                 domainLoads.push(new PointMomentLoad(raw.id, raw.magnitude, raw.x, category));
             } 
-            // FIX 2: Corregido el string. Debe ser 'DistributedForce', NO 'DistributedForceLoad'
             else if (raw.type === 'DistributedForce' && typeof raw.startX === 'number' && typeof raw.endX === 'number') {
-                
                 const rawStart = raw.startX;
                 const rawEnd = raw.endX;
 
@@ -98,16 +118,22 @@ export class BeamAnalysisService {
                     const elEnd = el.endNode.x;
                     const tolerance = 1e-4;
 
-                    const overlaps = (elStart >= rawStart - tolerance) && (elEnd <= rawEnd + tolerance);
+                    // Split distributed loads across element boundaries for proper FEM application
+                    const overlaps = (elStart < rawEnd + tolerance) && (elEnd > rawStart - tolerance);
 
                     if (overlaps) {
-                        domainLoads.push(new DistributedForceLoad(
-                            `${raw.id}_el${index}`, 
-                            raw.magnitude, 
-                            elStart, 
-                            elEnd, 
-                            category
-                        ));
+                        const loadStart = Math.max(elStart, rawStart);
+                        const loadEnd = Math.min(elEnd, rawEnd);
+                        
+                        if (loadEnd > loadStart + tolerance) {
+                            domainLoads.push(new DistributedForceLoad(
+                                `${raw.id}_el${index}`, 
+                                raw.magnitude, 
+                                loadStart, 
+                                loadEnd, 
+                                category
+                            ));
+                        }
                     }
                 });
             }

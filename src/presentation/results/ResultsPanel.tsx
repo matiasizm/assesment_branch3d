@@ -1,22 +1,55 @@
-import React from 'react';
-import { ClipboardList, AlertTriangle } from 'lucide-react';
+import React, { useState, useMemo } from 'react';
+import { ClipboardList, AlertTriangle, BarChart3, Waves, MapPin, LayoutGrid } from 'lucide-react';
 import type { AnalysisResults } from '../../core/logic/FemSolver';
+import { Diagrams } from './Diagrams';
+import { DeformationPlot } from './DeformationPlot';
+import { ReactionsDisplay } from './ReactionsDisplay';
+import { IntegratedDiagrams } from './IntegratedDiagrams';
+import { DiagramCalculator } from '../../core/services/DiagramCalculator';
+import type { Node } from '../../core/entities/Node';
+import type { Load } from '../../core/entities/Load';
 
 interface ResultsPanelProps {
     results: AnalysisResults | null;
     error: string | null;
+    length: number;
+    nodes: Node[];
+    loads: Load[];
+    supports: Array<{ id: string, x: number, type: string }>;
 }
 
-export const ResultsPanel: React.FC<ResultsPanelProps> = ({ results, error }) => {
+type TabType = 'diagrams' | 'deformation' | 'reactions' | 'all';
+
+export const ResultsPanel: React.FC<ResultsPanelProps> = ({ results, error, length, nodes, loads, supports }) => {
+    const [activeTab, setActiveTab] = useState<TabType>('all');
+
+    const diagramData = useMemo(() => {
+        if (!results || nodes.length === 0) return null;
+        
+        try {
+            return DiagramCalculator.calculateDiagrams(
+                length,
+                nodes,
+                loads,
+                results.reactions,
+                results.displacements,
+                200 // High resolution for smooth curves
+            );
+        } catch (err) {
+            console.error('Error calculating diagrams:', err);
+            return null;
+        }
+    }, [results, length, nodes, loads]);
+
     if (error) {
         return (
-            <div className="h-full flex flex-col items-center justify-center text-rose-400 gap-4">
-                <div className="p-4 bg-rose-500/10 rounded-full border border-rose-500/20 shadow-[0_0_30px_rgba(244,63,94,0.2)]">
-                    <AlertTriangle size={32} />
+            <div className="h-full flex flex-col items-center justify-center text-rose-400 gap-6 p-8">
+                <div className="p-6 bg-gradient-to-br from-rose-500/10 to-red-500/10 rounded-2xl border-2 border-rose-500/30 shadow-2xl shadow-rose-500/10 animate-in fade-in-50 duration-300">
+                    <AlertTriangle size={48} className="text-rose-400" />
                 </div>
-                <div className="text-center">
-                    <h3 className="font-bold text-lg mb-1">Calculation Error</h3>
-                    <p className="text-sm text-rose-300/70 max-w-md">{error}</p>
+                <div className="text-center max-w-md">
+                    <h3 className="font-bold text-2xl mb-3 text-rose-300">Calculation Error</h3>
+                    <p className="text-sm text-rose-300/80 leading-relaxed bg-slate-900/50 p-4 rounded-lg border border-rose-500/20">{error}</p>
                 </div>
             </div>
         );
@@ -24,79 +57,119 @@ export const ResultsPanel: React.FC<ResultsPanelProps> = ({ results, error }) =>
 
     if (!results) {
         return (
-            <div className="h-full flex flex-col items-center justify-center text-slate-500 gap-4 opacity-60">
-                <ClipboardList size={48} strokeWidth={1} />
-                <p className="text-sm tracking-wider uppercase">Results will appear here</p>
+            <div className="h-full flex flex-col items-center justify-center text-slate-500 gap-6 p-8">
+                <div className="p-8 bg-slate-900/40 backdrop-blur-sm rounded-2xl border border-slate-700/30 shadow-xl">
+                    <ClipboardList size={64} strokeWidth={1.5} className="mx-auto mb-4 text-slate-600" />
+                    <div className="text-center">
+                        <h3 className="font-bold text-xl mb-2 text-slate-400">No Results Yet</h3>
+                        <p className="text-sm tracking-wider uppercase text-slate-600 mb-1">Results will appear here</p>
+                        <p className="text-xs text-slate-700 mt-2">Click <span className="font-semibold text-emerald-400">SOLVE</span> to calculate</p>
+                    </div>
+                </div>
             </div>
         );
     }
 
-    return (
-        <div className="h-full flex flex-col p-6 max-w-6xl mx-auto">
-            <h3 className="text-cyan-400 font-bold text-xs tracking-[0.2em] uppercase mb-6 flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-cyan-400 shadow-[0_0_10px_rgba(34,211,238,0.8)]"></span>
-                Analysis Report
-            </h3>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-12 h-full overflow-hidden">
-                
-                {/* --- Tabla Reacciones --- */}
-                <div className="flex flex-col min-h-0">
-                    <h4 className="text-slate-400 text-xs font-bold uppercase mb-4 pl-2 border-l-2 border-slate-700">Support Reactions</h4>
-                    <div className="overflow-auto pr-2 custom-scrollbar">
-                        <table className="w-full text-sm">
-                            <thead className="text-slate-500 border-b border-white/5 text-xs uppercase">
-                                <tr>
-                                    <th className="pb-3 text-left pl-4 font-normal">Node ID</th>
-                                    <th className="pb-3 text-right font-normal">Fy (kN)</th>
-                                    <th className="pb-3 text-right pr-4 font-normal">Moment (kNm)</th>
-                                </tr>
-                            </thead>
-                            <tbody className="text-slate-300">
-                                {Object.entries(results.reactions).map(([id, r]) => (
-                                    <tr key={id} className="border-b border-white/5 hover:bg-white/5 transition-colors group">
-                                        <td className="py-3 pl-4 font-mono text-slate-500 group-hover:text-cyan-400 transition-colors">{id}</td>
-                                        <td className={`py-3 text-right font-mono ${r.fy !== 0 ? "text-emerald-400 font-bold" : "opacity-30"}`}>
-                                            {r.fy.toFixed(2)}
-                                        </td>
-                                        <td className={`py-3 pr-4 text-right font-mono ${r.m !== 0 ? "text-emerald-400 font-bold" : "opacity-30"}`}>
-                                            {r.m.toFixed(2)}
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
+    const tabs = [
+        { id: 'all' as TabType, label: 'All Views', icon: LayoutGrid },
+        { id: 'diagrams' as TabType, label: 'Integrated View', icon: BarChart3 },
+        { id: 'deformation' as TabType, label: 'Deformation', icon: Waves },
+        { id: 'reactions' as TabType, label: 'Reactions', icon: MapPin },
+    ];
 
-                {/* --- Tabla Desplazamientos --- */}
-                <div className="flex flex-col min-h-0">
-                    <h4 className="text-slate-400 text-xs font-bold uppercase mb-4 pl-2 border-l-2 border-slate-700">Displacements</h4>
-                    <div className="overflow-auto pr-2 custom-scrollbar">
-                        <table className="w-full text-sm">
-                            <thead className="text-slate-500 border-b border-white/5 text-xs uppercase">
-                                <tr>
-                                    <th className="pb-3 text-left pl-4 font-normal">Node ID</th>
-                                    <th className="pb-3 text-right font-normal">Deflection Y (mm)</th>
-                                    <th className="pb-3 text-right pr-4 font-normal">Rotation (rad)</th>
-                                </tr>
-                            </thead>
-                            <tbody className="text-slate-300">
-                                {Object.entries(results.displacements).map(([id, d]) => (
-                                    <tr key={id} className="border-b border-white/5 hover:bg-white/5 transition-colors">
-                                        <td className="py-3 pl-4 font-mono text-slate-500">{id}</td>
-                                        <td className={`py-3 text-right font-mono ${Math.abs(d.y) > 0.0001 ? "text-cyan-300" : "opacity-30"}`}>
-                                            {(d.y * 1000).toFixed(3)}
-                                        </td>
-                                        <td className="py-3 pr-4 text-right font-mono opacity-60">
-                                            {d.rotation.toFixed(5)}
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
+    return (
+        <div className="h-full flex flex-col p-6 max-w-7xl mx-auto w-full bg-gradient-to-br from-slate-950 to-slate-900">
+            {/* Tab Navigation - Enhanced */}
+            <div className="flex items-center gap-3 mb-8 pb-4 border-b border-slate-800/50">
+                {tabs.map((tab) => {
+                    const Icon = tab.icon;
+                    return (
+                        <button
+                            key={tab.id}
+                            onClick={() => setActiveTab(tab.id)}
+                            className={`
+                                flex items-center gap-2.5 px-5 py-2.5 rounded-xl text-sm font-bold transition-all
+                                ${activeTab === tab.id
+                                    ? 'bg-gradient-to-r from-orange-500 to-orange-600 text-white shadow-lg shadow-orange-500/30 scale-105'
+                                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60 border border-slate-700/50'
+                                }
+                            `}
+                        >
+                            <Icon size={16} />
+                            {tab.label}
+                        </button>
+                    );
+                })}
+            </div>
+
+            {/* Content Area */}
+            <div className="flex-1 min-h-0 overflow-auto custom-scrollbar">
+                {activeTab === 'all' && (
+                    <div className="space-y-6">
+                        {/* Integrated Diagrams */}
+                        {diagramData && results && (
+                            <div className="flex items-center justify-center">
+                                <IntegratedDiagrams
+                                    results={results}
+                                    diagramData={diagramData}
+                                    length={length}
+                                    nodes={nodes}
+                                    supports={supports}
+                                    loads={loads}
+                                />
+                            </div>
+                        )}
+
+                        {/* Deformation */}
+                        {diagramData && (
+                            <div className="bg-gradient-to-br from-slate-800/60 to-slate-900/60 backdrop-blur-sm rounded-2xl border border-slate-700/30 p-6 shadow-xl">
+                                <DeformationPlot 
+                                    deformation={diagramData.deformation}
+                                    length={length}
+                                />
+                            </div>
+                        )}
+
+                        {/* Reactions */}
+                        <div className="bg-gradient-to-br from-slate-800/60 to-slate-900/60 backdrop-blur-sm rounded-2xl border border-slate-700/30 p-6 shadow-xl">
+                            <ReactionsDisplay 
+                                reactions={results.reactions}
+                                nodes={nodes}
+                            />
+                        </div>
                     </div>
-                </div>
+                )}
+
+                {activeTab === 'diagrams' && diagramData && results && (
+                    <div className="h-full flex items-center justify-center">
+                        <IntegratedDiagrams
+                            results={results}
+                            diagramData={diagramData}
+                            length={length}
+                            nodes={nodes}
+                            supports={supports}
+                            loads={loads}
+                        />
+                    </div>
+                )}
+
+                {activeTab === 'deformation' && diagramData && (
+                    <div className="bg-gradient-to-br from-slate-800/60 to-slate-900/60 backdrop-blur-sm rounded-2xl border border-slate-700/30 p-6 h-full shadow-xl">
+                        <DeformationPlot 
+                            deformation={diagramData.deformation}
+                            length={length}
+                        />
+                    </div>
+                )}
+
+                {activeTab === 'reactions' && (
+                    <div className="bg-gradient-to-br from-slate-800/60 to-slate-900/60 backdrop-blur-sm rounded-2xl border border-slate-700/30 p-6 h-full shadow-xl">
+                        <ReactionsDisplay 
+                            reactions={results.reactions}
+                            nodes={nodes}
+                        />
+                    </div>
+                )}
             </div>
         </div>
     );

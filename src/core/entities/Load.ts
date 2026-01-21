@@ -1,26 +1,20 @@
-// src/core/entities/Load.ts
-
 export type LoadType = 'PointForce' | 'DistributedForce' | 'PointMoment';
 
-// 1. NUEVO: Definimos las categorías de carga estándar (ASCE 7 / Eurocode)
 export type LoadCategory = 'Dead' | 'Live' | 'Wind' | 'Snow' | 'Seismic';
 
 export interface LoadBase {
     id: string;
     type: LoadType;
     magnitude: number;
-    // 2. NUEVO: Cada carga debe pertenecer a un grupo
     category: LoadCategory; 
 }
-
-// Actualizamos las clases para incluir 'category' en el constructor
 
 export class PointForceLoad implements LoadBase {
     public readonly id: string;
     public readonly type: LoadType = 'PointForce';
     public readonly magnitude: number;
     public readonly x: number;
-    public readonly category: LoadCategory; // <--- Nuevo campo
+    public readonly category: LoadCategory;
 
     constructor(id: string, magnitude: number, x: number, category: LoadCategory = 'Dead') {
         this.id = id;

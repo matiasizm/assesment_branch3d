@@ -31,10 +31,6 @@ export class Element {
         return Math.abs(dx);
     }
 
-    /**
-     * Delega el cálculo a la librería lógica especializada.
-     * Esto mantiene la entidad limpia.
-     */
     get stiffnessMatrix(): number[][] {
         return StiffnessMatrix.beam2D(this.E, this.I, this.length);
     }
