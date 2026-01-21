@@ -70,6 +70,34 @@ npm run preview  # Preview production build
 
 This application follows **Pragmatic Clean Architecture** principles with clear separation of concerns between business logic and presentation layers.
 
+1. Layered Architecture
+
+The codebase is organized into three distinct layers:
+
+src/
+├── core/             # THE BRAIN: Pure TS, Framework-agnostic
+│   ├── entities/     # Domain models (Node, Element, Load)
+│   ├── logic/        # FEM Algorithms (StiffnessMatrix, Solver)
+│   └── services/     # Business Services (Meshing, Load Processing)
+├── presentation/     # THE FACE: React UI
+│   ├── editor/       # Interactive Canvas & Inputs
+│   ├── results/      # Visualization & Data Tables
+│   └── hooks/        # State Controllers (useBeamAnalysis)
+└── shared/           # Utilities & Types
+
+2. Algorithmic Decision: Why FEM?
+
+Instead of using analytical formulas (which are limited to simple, determinate beams), I implemented a Direct Stiffness Method solver.
+
+    Scalability: It allows the system to solve indeterminate structures (continuous beams with N supports) without changing the codebase.
+
+    Precision: It solves the system F=K⋅u, ensuring engineering-grade accuracy.
+
+    Flexibility: It handles non-uniform segments and complex loading conditions natively.
+
+    
+
+
 ### Layered Architecture
 
 The codebase is organized into three main layers:
